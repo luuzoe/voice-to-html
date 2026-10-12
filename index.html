@@ -219,7 +219,8 @@
     }
     .primary { flex: 1; border: 1px solid var(--accent); color: var(--accent-ink); background: var(--accent); }
     .secondary { border: 1px solid var(--line); color: var(--ink); background: transparent; }
-    .primary:disabled { opacity: .5; cursor: wait; }
+    .primary:disabled, .secondary:disabled { opacity: .5; cursor: wait; }
+    .share-secondary { width: 100%; margin-top: 10px; }
     .note {
       display: flex;
       gap: 10px;
@@ -285,7 +286,7 @@
   <main class="shell">
     <section class="intro">
       <h1>အသံကို HTML ဖိုင်တစ်ဖိုင်ထဲ ထည့်ပို့ပါ</h1>
-      <p>အသံသွင်းပါ၊ HTML ဖိုင်ထုတ်ပါ၊ ပြီးရင် သူငယ်ချင်းဆီ ဖိုင်အဖြစ် တိုက်ရိုက်ပို့နိုင်ပါတယ်။</p>
+      <p>အသံသွင်းပြီးတာနဲ့ HTML ကို Copy လုပ်ပါ။ ဒေါင်းစရာမလိုဘဲ ဖုန်းရဲ့ Share မှ ဖိုင်အဖြစ်လည်း တိုက်ရိုက်ပို့နိုင်ပါတယ်။</p>
     </section>
 
     <section class="panel" aria-live="polite">
@@ -325,8 +326,9 @@
         </div>
         <div class="actions">
           <button class="secondary" id="backBtn" type="button">နောက်သို့</button>
-          <button class="primary" id="downloadBtn" type="button">HTML ဖိုင် ထုတ်မယ်</button>
+          <button class="primary" id="copyBtn" type="button">HTML ကို Copy လုပ်မယ်</button>
         </div>
+        <button class="secondary share-secondary" id="shareBtn" type="button">ဖိုင်အဖြစ် တိုက်ရိုက်ပို့မယ်</button>
         <div class="note">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6m0-9v.01"/></svg>
           <span>အသံဖွင့်ရန် အလိုအလျောက် ကြိုးစားပေးပါမယ်။ ဖုန်း/ဘရောက်ဇာက အသံ Autoplay ကို ပိတ်ထားရင် လက်ခံသူက “အသံဖွင့်မယ်” ခလုတ်ကို တစ်ချက်နှိပ်ရပါမယ်။</span>
@@ -336,8 +338,8 @@
 
     <section class="steps" aria-label="အသုံးပြုနည်း">
       <div class="step"><i>1</i><b>အသံသွင်း</b>မိုက်ခရိုဖုန်းသုံး သို့မဟုတ် အသံဖိုင်ရွေးပါ။</div>
-      <div class="step"><i>2</i><b>ဖိုင်ထုတ်</b>အသံပါပြီးသား HTML ဖိုင်တစ်ဖိုင် ရယူပါ။</div>
-      <div class="step"><i>3</i><b>ပို့လိုက်</b>ထွက်လာတဲ့ .html ဖိုင်ကို ကြိုက်တဲ့ app နဲ့ ပို့ပါ။</div>
+      <div class="step"><i>2</i><b>Copy လုပ်</b>ခလုတ်တစ်ချက်နှိပ်ပြီး အသံပါတဲ့ HTML အကုန် Copy လုပ်ပါ။</div>
+      <div class="step"><i>3</i><b>ပို့လိုက်</b>ဖိုင်အဖြစ်ပို့ချင်ရင် Share ခလုတ်ကနေ ကြိုက်တဲ့ app ကို ရွေးပါ။</div>
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
@@ -359,7 +361,8 @@
       var messageInput = document.getElementById('messageInput');
       var changeBtn = document.getElementById('changeBtn');
       var backBtn = document.getElementById('backBtn');
-      var downloadBtn = document.getElementById('downloadBtn');
+      var copyBtn = document.getElementById('copyBtn');
+      var shareBtn = document.getElementById('shareBtn');
       var toast = document.getElementById('toast');
       var recorder = null;
       var stream = null;
@@ -527,27 +530,60 @@
       changeBtn.addEventListener('click', resetChoice);
       backBtn.addEventListener('click', resetChoice);
 
-      downloadBtn.addEventListener('click', function () {
+      function copyHtml(html) {
+        if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(html);
+        return new Promise(function (resolve, reject) {
+          var area = document.createElement('textarea');
+          area.value = html;
+          area.setAttribute('readonly', '');
+          area.style.position = 'fixed';
+          area.style.opacity = '0';
+          document.body.appendChild(area);
+          area.select();
+          try {
+            if (document.execCommand('copy')) resolve(); else reject(new Error('copy failed'));
+          } catch (error) { reject(error); }
+          area.remove();
+        });
+      }
+
+      function prepareHtml() {
+        return blobToDataUrl(chosenBlob).then(function (dataUrl) { return makeReceiverHtml(dataUrl); });
+      }
+
+      copyBtn.addEventListener('click', function () {
         if (!chosenBlob) { showToast('အသံအရင်ထည့်ပေးပါ။'); return; }
-        downloadBtn.disabled = true;
-        downloadBtn.textContent = 'ဖိုင်ပြင်ဆင်နေပါတယ်…';
-        blobToDataUrl(chosenBlob).then(function (dataUrl) {
-          var html = makeReceiverHtml(dataUrl);
-          var out = new Blob([html], { type: 'text/html;charset=utf-8' });
-          var url = URL.createObjectURL(out);
-          var link = document.createElement('a');
-          link.href = url;
-          link.download = 'voice-message.html';
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-          showToast('voice-message.html ဖိုင် ထုတ်ပြီးပါပြီ။ ဖိုင်ကို တခြားသူဆီ ပို့နိုင်ပါပြီ။');
+        copyBtn.disabled = true;
+        copyBtn.textContent = 'Copy လုပ်နေပါတယ်…';
+        prepareHtml().then(copyHtml).then(function () {
+          showToast('အသံပါတဲ့ HTML အကုန် Copy လုပ်ပြီးပါပြီ။');
         }).catch(function () {
-          showToast('HTML ဖိုင် ထုတ်လို့မရပါ။ ထပ်စမ်းကြည့်ပါ။');
+          showToast('Copy လုပ်လို့မရပါ။ ထပ်စမ်းကြည့်ပါ။');
         }).finally(function () {
-          downloadBtn.disabled = false;
-          downloadBtn.textContent = 'HTML ဖိုင် ထုတ်မယ်';
+          copyBtn.disabled = false;
+          copyBtn.textContent = 'HTML ကို Copy လုပ်မယ်';
+        });
+      });
+
+      shareBtn.addEventListener('click', function () {
+        if (!chosenBlob) { showToast('အသံအရင်ထည့်ပေးပါ။'); return; }
+        shareBtn.disabled = true;
+        shareBtn.textContent = 'ဖိုင်ပြင်ဆင်နေပါတယ်…';
+        prepareHtml().then(function (html) {
+          var out = new File([html], 'voice-message.html', { type: 'text/html;charset=utf-8' });
+          if (!navigator.share || (navigator.canShare && !navigator.canShare({ files: [out] }))) {
+            throw new Error('file sharing unavailable');
+          }
+          shareBtn.textContent = 'ပို့မယ့် app ရွေးပါ…';
+          return navigator.share({ files: [out], title: titleInput.value.trim() || 'Voice message' });
+        }).then(function () {
+          showToast('HTML ဖိုင်ကို ပို့ပြီးပါပြီ။');
+        }).catch(function (error) {
+          if (error && error.name === 'AbortError') return;
+          showToast('ဒီဘရောက်ဇာမှာ ဖိုင်တိုက်ရိုက်ပို့ခြင်း မရပါ။ အပေါ်က Copy ခလုတ်ကို သုံးနိုင်ပါတယ်။');
+        }).finally(function () {
+          shareBtn.disabled = false;
+          shareBtn.textContent = 'ဖိုင်အဖြစ် တိုက်ရိုက်ပို့မယ်';
         });
       });
 
