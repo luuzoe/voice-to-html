@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="my">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="icon" href="data:," />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;500;600;700&family=Public+Sans:wght@600;700&display=swap" rel="stylesheet" />
+  <title>Voice to HTML</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f7f3;
+      --surface: #ffffff;
+      --surface-2: #e8eee8;
+      --ink: #17201b;
+      --muted: #58645c;
+      --line: #cfd9d1;
+      --accent: #0a6e52;
+      --accent-ink: #ffffff;
+      --accent-soft: #d9eee6;
+      --record: #c83a32;
+      --record-soft: #f9e1de;
+      --shadow: 0 18px 48px rgba(19, 47, 34, .10);
+      --focus: #e0a500;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111714;
+        --surface: #1a221e;
+        --surface-2: #222d27;
+        --ink: #eff6f1;
+        --muted: #aebbb2;
+        --line: #34423a;
+        --accent: #55c49d;
+        --accent-ink: #09251b;
+        --accent-soft: #173d30;
+        --record: #ff7770;
+        --record-soft: #47231f;
+        --shadow: 0 20px 55px rgba(0, 0, 0, .28);
+        --focus: #ffd058;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: var(--bg); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, transparent 0 49%, color-mix(in srgb, var(--line) 34%, transparent) 50%, transparent 51%) 0 0 / 46px 46px,
+        linear-gradient(0deg, transparent 0 49%, color-mix(in srgb, var(--line) 34%, transparent) 50%, transparent 51%) 0 0 / 46px 46px,
+        var(--bg);
+      font-family: "Noto Sans Myanmar", sans-serif;
+    }
+    button, input, textarea { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    .shell {
+      width: min(100% - 32px, 760px);
+      margin: 0 auto;
+      padding: max(42px, env(safe-area-inset-top)) 0 max(44px, env(safe-area-inset-bottom));
+    }
+    .intro { margin-bottom: 24px; }
+    h1 {
+      margin: 0 0 10px;
+      max-width: 640px;
+      font-size: clamp(30px, 7vw, 48px);
+      line-height: 1.18;
+      letter-spacing: -.035em;
+      text-wrap: balance;
+    }
+    .intro p {
+      margin: 0;
+      max-width: 610px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .panel {
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+    .stage { display: none; }
+    .stage.active { display: block; }
+    .recorder-stage { padding: clamp(24px, 6vw, 42px); }
+    .recorder-stage h2, .details-stage h2 {
+      margin: 0 0 7px;
+      font-size: 21px;
+      line-height: 1.4;
+    }
+    .stage-lead { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .record-center {
+      display: grid;
+      justify-items: center;
+      min-height: 286px;
+      padding: 38px 0 28px;
+    }
+    .record-button {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 126px;
+      height: 126px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--record);
+      box-shadow: 0 0 0 10px var(--record-soft), 0 12px 26px rgba(157, 35, 28, .22);
+      cursor: pointer;
+      transition: transform .16s ease, box-shadow .16s ease;
+    }
+    .record-button:hover { transform: translateY(-2px); }
+    .record-button:active { transform: translateY(1px); }
+    .record-button.recording { box-shadow: 0 0 0 10px var(--record-soft), 0 0 0 20px color-mix(in srgb, var(--record-soft) 48%, transparent); }
+    .record-button svg { width: 38px; height: 38px; fill: currentColor; }
+    .record-button .stop-icon { display: none; width: 30px; height: 30px; border-radius: 6px; background: #fff; }
+    .record-button.recording .mic-icon { display: none; }
+    .record-button.recording .stop-icon { display: block; }
+    .timer {
+      margin-top: 25px;
+      font-family: "Public Sans", sans-serif;
+      font-size: 31px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .035em;
+    }
+    .record-label { margin-top: 6px; color: var(--muted); font-size: 13px; }
+    .or {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 13px;
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .or::before, .or::after { content: ""; height: 1px; background: var(--line); }
+    .file-input {
+      display: block;
+      width: 100%;
+      min-height: 52px;
+      padding: 7px;
+      border: 1px dashed var(--line);
+      border-radius: 13px;
+      color: var(--muted);
+      background: var(--surface-2);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .file-input::file-selector-button {
+      min-height: 36px;
+      margin-right: 11px;
+      padding: 6px 13px;
+      border: 0;
+      border-radius: 8px;
+      color: var(--accent-ink);
+      background: var(--accent);
+      font: 600 13px "Noto Sans Myanmar", sans-serif;
+      cursor: pointer;
+    }
+    .details-stage { padding: clamp(24px, 6vw, 42px); }
+    .audio-card {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 13px;
+      margin: 25px 0 28px;
+      padding: 15px;
+      border-radius: 16px;
+      background: var(--accent-soft);
+    }
+    .preview-btn {
+      display: grid;
+      place-items: center;
+      width: 47px;
+      height: 47px;
+      border: 0;
+      border-radius: 50%;
+      color: var(--accent-ink);
+      background: var(--accent);
+      cursor: pointer;
+    }
+    .preview-btn svg { width: 22px; height: 22px; fill: currentColor; }
+    .preview-btn .pause { display: none; }
+    .preview-btn.playing .play { display: none; }
+    .preview-btn.playing .pause { display: block; }
+    .audio-info { min-width: 0; }
+    .audio-info strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+    .audio-info span { color: var(--muted); font-family: "Public Sans", sans-serif; font-size: 12px; }
+    .change-btn { border: 0; color: var(--accent); background: transparent; font-weight: 700; cursor: pointer; }
+    .field { margin-top: 17px; }
+    .field label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 700; }
+    .field small { font-weight: 400; color: var(--muted); }
+    .field input, .field textarea {
+      display: block;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      padding: 13px 14px;
+      color: var(--ink);
+      background: var(--bg);
+      outline: 0;
+    }
+    .field textarea { min-height: 92px; resize: vertical; line-height: 1.6; }
+    .field input:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 19%, transparent); }
+    .actions { display: flex; gap: 10px; margin-top: 25px; }
+    .primary, .secondary {
+      min-height: 52px;
+      border-radius: 12px;
+      padding: 11px 18px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .primary { flex: 1; border: 1px solid var(--accent); color: var(--accent-ink); background: var(--accent); }
+    .secondary { border: 1px solid var(--line); color: var(--ink); background: transparent; }
+    .primary:disabled { opacity: .5; cursor: wait; }
+    .note {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+      padding: 14px 15px;
+      border-radius: 12px;
+      color: var(--muted);
+      background: var(--surface-2);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+    .note svg { flex: 0 0 auto; width: 19px; height: 19px; margin-top: 1px; stroke: var(--accent); fill: none; stroke-width: 2; }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: color-mix(in srgb, var(--surface) 82%, transparent);
+    }
+    .step { padding: 17px; font-size: 12px; color: var(--muted); line-height: 1.55; }
+    .step + .step { border-left: 1px solid var(--line); }
+    .step b { display: block; margin-bottom: 4px; color: var(--ink); font-size: 13px; }
+    .step i { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: 0 6px 7px 0; border-radius: 50%; color: var(--accent-ink); background: var(--accent); font-family: "Public Sans", sans-serif; font-size: 11px; font-style: normal; }
+    .toast {
+      position: fixed;
+      left: 50%; bottom: max(22px, env(safe-area-inset-bottom));
+      z-index: 20;
+      max-width: calc(100% - 32px);
+      padding: 12px 16px;
+      border-radius: 11px;
+      color: #fff;
+      background: #18211c;
+      box-shadow: 0 9px 26px rgba(0,0,0,.2);
+      opacity: 0;
+      transform: translate(-50%, 15px);
+      pointer-events: none;
+      transition: .2s ease;
+      font-size: 13px;
+      text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    @keyframes pulse { 50% { transform: scale(.94); opacity: .8; } }
+    .record-button.recording::after { content: ""; position: absolute; inset: -22px; border: 2px solid var(--record); border-radius: 50%; animation: pulse 1.2s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 22px, 760px); padding-top: 28px; }
+      .panel { border-radius: 18px; }
+      .recorder-stage, .details-stage { padding: 22px 18px; }
+      .record-center { min-height: 258px; padding-top: 34px; }
+      .record-button { width: 112px; height: 112px; }
+      .steps { grid-template-columns: 1fr; }
+      .step + .step { border-left: 0; border-top: 1px solid var(--line); }
+      .audio-card { grid-template-columns: auto 1fr; }
+      .change-btn { grid-column: 1 / -1; justify-self: start; padding: 4px 0 0; }
+      .actions { flex-direction: column-reverse; }
+      .secondary { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="intro">
+      <h1>အသံကို HTML ဖိုင်တစ်ဖိုင်ထဲ ထည့်ပို့ပါ</h1>
+      <p>အသံသွင်းပါ၊ HTML ဖိုင်ထုတ်ပါ၊ ပြီးရင် သူငယ်ချင်းဆီ ဖိုင်အဖြစ် တိုက်ရိုက်ပို့နိုင်ပါတယ်။</p>
+    </section>
+
+    <section class="panel" aria-live="polite">
+      <div class="stage recorder-stage active" id="recordStage">
+        <h2>အသံပြင်ဆင်မယ်</h2>
+        <p class="stage-lead">အောက်က ခလုတ်ကိုနှိပ်ပြီး အသံစသွင်းပါ။ ပြီးရင် ထပ်နှိပ်ပြီး ရပ်ပါ။</p>
+        <div class="record-center">
+          <button class="record-button" id="recordBtn" type="button" aria-label="အသံစသွင်းရန်">
+            <svg class="mic-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.2a3.7 3.7 0 0 0 3.7-3.7V5.7a3.7 3.7 0 0 0-7.4 0v4.8a3.7 3.7 0 0 0 3.7 3.7Zm6.15-3.9a1 1 0 0 0-2 0 4.15 4.15 0 0 1-8.3 0 1 1 0 0 0-2 0 6.16 6.16 0 0 0 5.15 6.07V19H8.7a1 1 0 1 0 0 2h6.6a1 1 0 1 0 0-2H13v-2.63a6.16 6.16 0 0 0 5.15-6.07Z"/></svg>
+            <span class="stop-icon" aria-hidden="true"></span>
+          </button>
+          <div class="timer" id="timer">00:00</div>
+          <div class="record-label" id="recordLabel">နှိပ်ပြီး အသံသွင်းပါ</div>
+        </div>
+        <div class="or">သို့မဟုတ်</div>
+        <input class="file-input" id="fileInput" type="file" accept="audio/*" aria-label="ရှိပြီးသား အသံဖိုင် ရွေးမယ်" />
+      </div>
+
+      <div class="stage details-stage" id="detailsStage">
+        <h2>နောက်ဆုံးအဆင့်</h2>
+        <p class="stage-lead">လက်ခံသူဖွင့်တဲ့အခါ မြင်ရမယ့် စာသားတွေ ထည့်နိုင်ပါတယ်။</p>
+        <div class="audio-card">
+          <button class="preview-btn" id="previewBtn" type="button" aria-label="အသံနားထောင်ရန်">
+            <svg class="play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+            <svg class="pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+          </button>
+          <div class="audio-info"><strong id="audioName">အသံဖိုင်</strong><span id="audioMeta">00:00</span></div>
+          <button class="change-btn" id="changeBtn" type="button">ပြန်ရွေးမယ်</button>
+        </div>
+        <div class="field">
+          <label for="titleInput">ခေါင်းစဉ် <small>(မဖြည့်လည်းရပါတယ်)</small></label>
+          <input id="titleInput" maxlength="80" placeholder="ဥပမာ — မင်းအတွက် အသံလေးတစ်ခု" />
+        </div>
+        <div class="field">
+          <label for="messageInput">စာတို <small>(မဖြည့်လည်းရပါတယ်)</small></label>
+          <textarea id="messageInput" maxlength="300" placeholder="လက်ခံသူကို ပြောချင်တဲ့ စာတို…"></textarea>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="backBtn" type="button">နောက်သို့</button>
+          <button class="primary" id="downloadBtn" type="button">HTML ဖိုင် ထုတ်မယ်</button>
+        </div>
+        <div class="note">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6m0-9v.01"/></svg>
+          <span>အသံဖွင့်ရန် အလိုအလျောက် ကြိုးစားပေးပါမယ်။ ဖုန်း/ဘရောက်ဇာက အသံ Autoplay ကို ပိတ်ထားရင် လက်ခံသူက “အသံဖွင့်မယ်” ခလုတ်ကို တစ်ချက်နှိပ်ရပါမယ်။</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="steps" aria-label="အသုံးပြုနည်း">
+      <div class="step"><i>1</i><b>အသံသွင်း</b>မိုက်ခရိုဖုန်းသုံး သို့မဟုတ် အသံဖိုင်ရွေးပါ။</div>
+      <div class="step"><i>2</i><b>ဖိုင်ထုတ်</b>အသံပါပြီးသား HTML ဖိုင်တစ်ဖိုင် ရယူပါ။</div>
+      <div class="step"><i>3</i><b>ပို့လိုက်</b>ထွက်လာတဲ့ .html ဖိုင်ကို ကြိုက်တဲ့ app နဲ့ ပို့ပါ။</div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status"></div>
+  <audio id="previewAudio" preload="metadata"></audio>
+
+  <script>
+    (function () {
+      var recordBtn = document.getElementById('recordBtn');
+      var timer = document.getElementById('timer');
+      var recordLabel = document.getElementById('recordLabel');
+      var fileInput = document.getElementById('fileInput');
+      var recordStage = document.getElementById('recordStage');
+      var detailsStage = document.getElementById('detailsStage');
+      var previewBtn = document.getElementById('previewBtn');
+      var previewAudio = document.getElementById('previewAudio');
+      var audioName = document.getElementById('audioName');
+      var audioMeta = document.getElementById('audioMeta');
+      var titleInput = document.getElementById('titleInput');
+      var messageInput = document.getElementById('messageInput');
+      var changeBtn = document.getElementById('changeBtn');
+      var backBtn = document.getElementById('backBtn');
+      var downloadBtn = document.getElementById('downloadBtn');
+      var toast = document.getElementById('toast');
+      var recorder = null;
+      var stream = null;
+      var chunks = [];
+      var chosenBlob = null;
+      var chosenName = '';
+      var objectUrl = '';
+      var timerId = null;
+      var startedAt = 0;
+      var toastId = null;
+
+      function showToast(text) {
+        clearTimeout(toastId);
+        toast.textContent = text;
+        toast.classList.add('show');
+        toastId = setTimeout(function () { toast.classList.remove('show'); }, 3200);
+      }
+
+      function formatTime(seconds) {
+        seconds = Math.max(0, Math.floor(seconds || 0));
+        var min = Math.floor(seconds / 60);
+        var sec = seconds % 60;
+        return String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+      }
+
+      function cleanUpStream() {
+        if (stream) stream.getTracks().forEach(function (track) { track.stop(); });
+        stream = null;
+      }
+
+      function setRecordingUI(on) {
+        recordBtn.classList.toggle('recording', on);
+        recordBtn.setAttribute('aria-label', on ? 'အသံသွင်းခြင်း ရပ်ရန်' : 'အသံစသွင်းရန်');
+        recordLabel.textContent = on ? 'အသံသွင်းနေပါတယ် — ရပ်ရန် ထပ်နှိပ်ပါ' : 'နှိပ်ပြီး အသံသွင်းပါ';
+      }
+
+      function bestMime() {
+        var types = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg;codecs=opus'];
+        if (!window.MediaRecorder) return '';
+        for (var i = 0; i < types.length; i++) {
+          if (MediaRecorder.isTypeSupported(types[i])) return types[i];
+        }
+        return '';
+      }
+
+      function startRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+          showToast('ဒီဘရောက်ဇာမှာ အသံသွင်းခြင်း မထောက်ပံ့ပါ။ အသံဖိုင်ရွေးပြီး ဆက်လုပ်နိုင်ပါတယ်။');
+          return;
+        }
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function (newStream) {
+          stream = newStream;
+          chunks = [];
+          var mime = bestMime();
+          recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+          recorder.ondataavailable = function (event) { if (event.data && event.data.size) chunks.push(event.data); };
+          recorder.onerror = function () {
+            clearInterval(timerId);
+            setRecordingUI(false);
+            cleanUpStream();
+            showToast('အသံသွင်းရာမှာ ပြဿနာရှိပါတယ်။ ထပ်စမ်းကြည့်ပါ။');
+          };
+          recorder.onstop = function () {
+            clearInterval(timerId);
+            setRecordingUI(false);
+            cleanUpStream();
+            var type = recorder.mimeType || mime || 'audio/webm';
+            var blob = new Blob(chunks, { type: type });
+            if (!blob.size) { showToast('အသံမရရှိပါ။ ထပ်စမ်းကြည့်ပါ။'); return; }
+            var ext = type.indexOf('mp4') > -1 ? 'm4a' : type.indexOf('ogg') > -1 ? 'ogg' : 'webm';
+            useAudio(blob, 'voice-message.' + ext);
+          };
+          recorder.start(250);
+          startedAt = Date.now();
+          timer.textContent = '00:00';
+          timerId = setInterval(function () { timer.textContent = formatTime((Date.now() - startedAt) / 1000); }, 250);
+          setRecordingUI(true);
+        }).catch(function () {
+          showToast('မိုက်ခရိုဖုန်းခွင့်ပြုချက် လိုပါတယ်။ ဒါမှမဟုတ် အသံဖိုင်ရွေးနိုင်ပါတယ်။');
+        });
+      }
+
+      function stopRecording() {
+        if (recorder && recorder.state !== 'inactive') recorder.stop();
+      }
+
+      function useAudio(blob, name) {
+        chosenBlob = blob;
+        chosenName = name || 'voice-message';
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(blob);
+        previewAudio.src = objectUrl;
+        audioName.textContent = chosenName;
+        audioMeta.textContent = formatTime((Date.now() - startedAt) / 1000) + ' · ' + readableSize(blob.size);
+        previewAudio.onloadedmetadata = function () {
+          if (isFinite(previewAudio.duration)) audioMeta.textContent = formatTime(previewAudio.duration) + ' · ' + readableSize(blob.size);
+        };
+        recordStage.classList.remove('active');
+        detailsStage.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function readableSize(bytes) {
+        if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+        return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+      }
+
+      function resetChoice() {
+        previewAudio.pause();
+        previewBtn.classList.remove('playing');
+        detailsStage.classList.remove('active');
+        recordStage.classList.add('active');
+        timer.textContent = '00:00';
+        fileInput.value = '';
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>'"]/g, function (char) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char];
+        });
+      }
+
+      function blobToDataUrl(blob) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function () { resolve(reader.result); };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      function makeReceiverHtml(dataUrl) {
+        var title = escapeHtml(titleInput.value.trim() || 'အသံလေးတစ်ခု ရောက်လာပါတယ်');
+        var message = escapeHtml(messageInput.value.trim());
+        var messageHtml = message ? '<p class="message">' + message.replace(/\n/g, '<br>') + '</p>' : '';
+        return '<!doctype html>\n<html lang="my">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="color-scheme" content="light dark">\n<title>' + title + '</title>\n<style>\n' +
+          ':root{color-scheme:light dark;--bg:#eef4ef;--card:#fff;--ink:#172019;--muted:#5b675e;--accent:#087454;--soft:#daf0e7;--line:#ccd8cf}'+
+          '@media(prefers-color-scheme:dark){:root{--bg:#111714;--card:#1a221e;--ink:#eef5f0;--muted:#aab8ae;--accent:#59caa1;--soft:#153d30;--line:#34423a}}'+
+          '*{box-sizing:border-box}body{margin:0;min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:22px;background:var(--bg);color:var(--ink);font-family:"Noto Sans Myanmar","Segoe UI",sans-serif}.card{width:min(100%,560px);padding:38px 28px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:0 18px 50px rgba(19,47,34,.12)}.wave{height:72px;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:22px}.wave i{display:block;width:5px;border-radius:8px;background:var(--accent);animation:bounce 1.15s ease-in-out infinite}.wave i:nth-child(1),.wave i:nth-child(9){height:18px}.wave i:nth-child(2),.wave i:nth-child(8){height:30px;animation-delay:-.15s}.wave i:nth-child(3),.wave i:nth-child(7){height:46px;animation-delay:-.3s}.wave i:nth-child(4),.wave i:nth-child(6){height:60px;animation-delay:-.45s}.wave i:nth-child(5){height:70px;animation-delay:-.6s}h1{margin:0;font-size:clamp(25px,7vw,38px);line-height:1.35;letter-spacing:-.025em}.message{margin:15px auto 0;max-width:430px;color:var(--muted);line-height:1.75}.play{display:inline-flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:54px;margin-top:27px;border:0;border-radius:13px;color:#fff;background:#087454;font:700 15px inherit;cursor:pointer}.play svg{width:21px;fill:currentColor}.status{min-height:20px;margin:14px 0 0;color:var(--muted);font-size:12px}.playing .wave i{animation-play-state:running}.paused .wave i{animation-play-state:paused;opacity:.55}@keyframes bounce{50%{transform:scaleY(.45)}}@media(prefers-reduced-motion:reduce){.wave i{animation:none}}'+
+          '</style>\n</head>\n<body>\n<main class="card paused" id="card"><div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><h1>' + title + '</h1>' + messageHtml + '<button class="play" id="play" type="button"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>အသံဖွင့်မယ်</span></button><p class="status" id="status">အသံဖွင့်ရန် ပြင်ဆင်နေပါတယ်…</p></main><audio id="audio" autoplay preload="auto" src="' + dataUrl + '"></audio>\n<script>\n' +
+          '(function(){var a=document.getElementById("audio"),b=document.getElementById("play"),c=document.getElementById("card"),s=document.getElementById("status"),t=b.querySelector("span");function ui(on){c.classList.toggle("paused",!on);c.classList.toggle("playing",on);t.textContent=on?"ခဏရပ်မယ်":"အသံဖွင့်မယ်";s.textContent=on?"အသံဖွင့်နေပါတယ်":"ခလုတ်နှိပ်ပြီး အသံဖွင့်နိုင်ပါတယ်";}b.onclick=function(){if(a.paused){a.play().then(function(){ui(true)}).catch(function(){ui(false)})}else{a.pause();ui(false)}};a.onplay=function(){ui(true)};a.onpause=function(){ui(false)};a.onended=function(){ui(false);a.currentTime=0};var p=a.play();if(p&&p.catch)p.catch(function(){ui(false)});})();'+
+          '\n<\/script>\n</body>\n</html>';
+      }
+
+      recordBtn.addEventListener('click', function () {
+        if (recorder && recorder.state === 'recording') stopRecording(); else startRecording();
+      });
+
+      fileInput.addEventListener('change', function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        if (file.type && file.type.indexOf('audio/') !== 0) { showToast('အသံဖိုင်တစ်ခုကို ရွေးပေးပါ။'); return; }
+        if (file.size > 35 * 1024 * 1024) { showToast('ဖိုင်အရွယ်ကြီးလွန်းပါတယ်။ 35 MB အောက်ကို ရွေးပေးပါ။'); return; }
+        startedAt = Date.now();
+        useAudio(file, file.name);
+      });
+
+      previewBtn.addEventListener('click', function () {
+        if (previewAudio.paused) previewAudio.play().catch(function () { showToast('အသံဖွင့်လို့ မရသေးပါ။'); });
+        else previewAudio.pause();
+      });
+      previewAudio.addEventListener('play', function () { previewBtn.classList.add('playing'); });
+      previewAudio.addEventListener('pause', function () { previewBtn.classList.remove('playing'); });
+      previewAudio.addEventListener('ended', function () { previewBtn.classList.remove('playing'); });
+      changeBtn.addEventListener('click', resetChoice);
+      backBtn.addEventListener('click', resetChoice);
+
+      downloadBtn.addEventListener('click', function () {
+        if (!chosenBlob) { showToast('အသံအရင်ထည့်ပေးပါ။'); return; }
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = 'ဖိုင်ပြင်ဆင်နေပါတယ်…';
+        blobToDataUrl(chosenBlob).then(function (dataUrl) {
+          var html = makeReceiverHtml(dataUrl);
+          var out = new Blob([html], { type: 'text/html;charset=utf-8' });
+          var url = URL.createObjectURL(out);
+          var link = document.createElement('a');
+          link.href = url;
+          link.download = 'voice-message.html';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+          showToast('voice-message.html ဖိုင် ထုတ်ပြီးပါပြီ။ ဖိုင်ကို တခြားသူဆီ ပို့နိုင်ပါပြီ။');
+        }).catch(function () {
+          showToast('HTML ဖိုင် ထုတ်လို့မရပါ။ ထပ်စမ်းကြည့်ပါ။');
+        }).finally(function () {
+          downloadBtn.disabled = false;
+          downloadBtn.textContent = 'HTML ဖိုင် ထုတ်မယ်';
+        });
+      });
+
+      window.addEventListener('beforeunload', cleanUpStream);
+    })();
+  </script>
+</body>
+</html>
